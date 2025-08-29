@@ -1,12 +1,15 @@
-use crate::Nonce;
+use crate::{K, Nonce};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2b512, Digest};
 use hkdf::SimpleHkdf;
 
-const BLOCK_SIZE: usize = 1024;
-type Block = [u8; BLOCK_SIZE];
-const BLOCK_COUNT: usize = 262_144;
-pub(crate) const PROOF_BYTE_COUNT: usize = BLOCK_COUNT.ilog2() as usize * 32;
+pub(crate) const BLOCK_SIZE: usize = 1024;
+pub(crate) type Block = [u8; BLOCK_SIZE];
+pub(crate) const BLOCK_COUNT: usize = 262_144;
+pub(crate) const TREE_PROOF_BYTE_COUNT: usize = BLOCK_COUNT.ilog2() as usize * 32;
+pub(crate) const CHALLENGE_PROOF_BYTE_COUNT: usize =
+    4 + 4 + (BLOCK_SIZE + TREE_PROOF_BYTE_COUNT) * 3;
+pub(crate) const FULL_PROOF_BYTE_COUNT: usize = 32 + CHALLENGE_PROOF_BYTE_COUNT * K;
 const U64_VALUE_COUNT: u128 = u64::MAX as u128 + 1;
 
 pub(crate) fn challenge_index(merkle_root: &[u8], i: usize) -> usize {
@@ -17,7 +20,7 @@ pub(crate) fn challenge_index(merkle_root: &[u8], i: usize) -> usize {
     (((seed * (BLOCK_COUNT - 2) as u128) / U64_VALUE_COUNT) as usize) + 2
 }
 
-pub(crate) fn reference_block_index(index: usize, block: Block) -> usize {
+pub(crate) fn reference_block_index(index: usize, block: &Block) -> usize {
     let i = index as u64;
     let r1 = mix(u64::from_le_bytes(block[0..8].try_into().unwrap()), i);
     let r2 = mix(u64::from_le_bytes(block[8..16].try_into().unwrap()), i);
@@ -26,28 +29,38 @@ pub(crate) fn reference_block_index(index: usize, block: Block) -> usize {
     ((r * j) >> 64) as usize
 }
 
-pub(crate) fn init_blocks(nonce: Nonce) -> [Block; BLOCK_COUNT] {
-    let mut blocks = [[0u8; BLOCK_SIZE]; BLOCK_COUNT];
-    blocks[0] = new_block(nonce, &0u32.to_le_bytes(), nonce);
-    let mut block = new_block(nonce, &1u32.to_le_bytes(), nonce);
-    blocks[1] = block;
-    for index in 2..BLOCK_COUNT {
-        let reference_block = blocks[reference_block_index(index, block)];
-        block = new_block(nonce, &block, &reference_block);
-        blocks[index] = block;
+pub(crate) fn init_blocks(nonce: Nonce) -> Box<[Block; BLOCK_COUNT]> {
+    let mut blocks = Vec::with_capacity(BLOCK_COUNT);
+    blocks.push(allocate_block(0u32, nonce));
+    blocks.push(allocate_block(1u32, nonce));
+    for _ in 2..BLOCK_COUNT {
+        blocks.push([0u8; BLOCK_SIZE]);
     }
-    blocks
+    for index in 2..BLOCK_COUNT {
+        let reference_index = reference_block_index(index, &blocks[index - 1]);
+        fill_block(nonce, &mut blocks, index, reference_index);
+    }
+    blocks.into_boxed_slice().try_into().unwrap()
 }
 
-fn new_block(nonce: Nonce, input1: &[u8], input2: &[u8]) -> Block {
-    let mut hasher = Blake2b512::new_with_prefix(input1);
-    hasher.update(input2);
+fn allocate_block(i: u32, nonce: Nonce) -> Block {
+    let mut hasher = Blake2b512::new_with_prefix(i.to_le_bytes());
+    hasher.update(nonce);
     let hash = hasher.finalize_fixed();
-    let mut block = [0u8; BLOCK_SIZE];
+    let mut allocated = [0u8; BLOCK_SIZE];
     SimpleHkdf::<Blake2b512>::new(Some(nonce), &hash)
-        .expand(&[], &mut block)
+        .expand(&[], &mut allocated)
         .expect("failed to expand hash");
-    block
+    allocated
+}
+
+fn fill_block(nonce: Nonce, blocks: &mut [Block], index: usize, reference_index: usize) {
+    let mut hasher = Blake2b512::new_with_prefix(blocks[index - 1]);
+    hasher.update(blocks[reference_index]);
+    let hash = hasher.finalize_fixed();
+    SimpleHkdf::<Blake2b512>::new(Some(nonce), &hash)
+        .expand(&[], &mut blocks[index])
+        .expect("failed to expand hash");
 }
 
 fn mix(a: u64, b: u64) -> u64 {

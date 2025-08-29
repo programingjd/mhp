@@ -9,14 +9,19 @@ crate-type = ["cdylib", "rlib"]
 [dependencies.rs_merkle]
 version = "1.5"
 default-features = false
-features = ["std"]
+features = []
 
 [dependencies.blake2]
 version = "0.10"
 default-features = false
-features = ["std"]
+features = []
 
 [dependencies.hkdf]
 version = "0.12"
 default-features = false
-features = ["std"]
+features = []
+
+[dev-dependencies.rand]
+version = "0.9"
+default-features = false
+features = ["os_rng"]
