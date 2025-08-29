@@ -3,6 +3,7 @@ use blake2::digest::FixedOutput;
 use blake2::{Blake2b512, Digest};
 use hkdf::SimpleHkdf;
 
+pub(crate) const ITERATION_COUNT: usize = 64;
 pub(crate) const BLOCK_SIZE: usize = 1024;
 pub(crate) type Block = [u8; BLOCK_SIZE];
 pub(crate) const BLOCK_COUNT: usize = 262_144;
@@ -46,7 +47,10 @@ pub(crate) fn init_blocks(nonce: Nonce) -> Box<[Block; BLOCK_COUNT]> {
 fn allocate_block(i: u32, nonce: Nonce) -> Block {
     let mut hasher = Blake2b512::new_with_prefix(i.to_le_bytes());
     hasher.update(nonce);
-    let hash = hasher.finalize_fixed();
+    let mut hash = hasher.finalize_fixed();
+    for _ in 0..ITERATION_COUNT {
+        hash = Blake2b512::digest(&hash);
+    }
     let mut allocated = [0u8; BLOCK_SIZE];
     SimpleHkdf::<Blake2b512>::new(Some(nonce), &hash)
         .expand(&[], &mut allocated)
@@ -57,7 +61,10 @@ fn allocate_block(i: u32, nonce: Nonce) -> Block {
 fn fill_block(nonce: Nonce, blocks: &mut [Block], index: usize, reference_index: usize) {
     let mut hasher = Blake2b512::new_with_prefix(blocks[index - 1]);
     hasher.update(blocks[reference_index]);
-    let hash = hasher.finalize_fixed();
+    let mut hash = hasher.finalize_fixed();
+    for _ in 0..ITERATION_COUNT {
+        hash = Blake2b512::digest(&hash);
+    }
     SimpleHkdf::<Blake2b512>::new(Some(nonce), &hash)
         .expand(&[], &mut blocks[index])
         .expect("failed to expand hash");

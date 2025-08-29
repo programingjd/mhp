@@ -1,6 +1,6 @@
 use crate::block::{
-    BLOCK_COUNT, BLOCK_SIZE, Block, FULL_PROOF_BYTE_COUNT, TREE_PROOF_BYTE_COUNT, challenge_index,
-    reference_block_index,
+    BLOCK_COUNT, BLOCK_SIZE, Block, FULL_PROOF_BYTE_COUNT, ITERATION_COUNT, TREE_PROOF_BYTE_COUNT,
+    challenge_index, reference_block_index,
 };
 use crate::hasher::Blake2bHasher;
 use crate::{K, Nonce};
@@ -77,7 +77,10 @@ pub fn verify_proof(nonce: Nonce, proof: &[u8; FULL_PROOF_BYTE_COUNT]) -> Option
 fn compute_block(nonce: Nonce, parent_block: &Block, reference_block: &Block) -> Block {
     let mut hasher = Blake2b512::new_with_prefix(parent_block);
     hasher.update(reference_block);
-    let hash = hasher.finalize_fixed();
+    let mut hash = hasher.finalize_fixed();
+    for _ in 0..ITERATION_COUNT {
+        hash = Blake2b512::digest(&hash);
+    }
     let mut allocated = [0u8; BLOCK_SIZE];
     SimpleHkdf::<Blake2b512>::new(Some(nonce), &hash)
         .expand(&[], &mut allocated)

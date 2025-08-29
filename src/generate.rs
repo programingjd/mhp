@@ -41,16 +41,19 @@ mod tests {
     use std::fmt::{Formatter, LowerHex};
     use std::fs::OpenOptions;
     use std::io::Write;
+    use std::time::SystemTime;
 
     #[test]
     fn test_generate_proof() {
         proof();
     }
 
-    #[ignore]
+    // #[ignore]
     #[test]
     fn record_proof() {
+        let t = SystemTime::now();
         let (nonce, proof) = proof();
+        println!("{}s", t.elapsed().unwrap().as_millis() as f32 / 1000.0);
         assert_eq!(FULL_PROOF_BYTE_COUNT, proof.len());
         OpenOptions::new()
             .truncate(true)
