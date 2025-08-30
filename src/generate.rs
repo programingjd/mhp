@@ -1,14 +1,17 @@
-use crate::block::{FULL_PROOF_BYTE_COUNT, challenge_index, init_blocks, reference_block_index};
+use crate::block::{
+    CHAIN_BLOCK_COUNT, FULL_PROOF_BYTE_COUNT, challenge_index, generate_chains,
+    reference_block_index,
+};
 use crate::hasher::Blake2bHasher;
 use crate::{K, Nonce};
 use rs_merkle::{Hasher, MerkleTree};
 
 pub fn generate_proof(nonce: Nonce) -> Box<[u8; FULL_PROOF_BYTE_COUNT]> {
-    let mut output = Vec::new();
-    let blocks = init_blocks(nonce);
-    let leaves = blocks
+    let mut output = Vec::with_capacity(FULL_PROOF_BYTE_COUNT);
+    let chains = generate_chains(nonce);
+    let leaves = chains
         .iter()
-        .map(|it| Blake2bHasher::hash(it))
+        .flat_map(|it| it.iter().map(|it| Blake2bHasher::hash(it)))
         .collect::<Vec<_>>();
     let tree = MerkleTree::<Blake2bHasher>::from_leaves(&leaves);
     let root = tree.root().unwrap();
@@ -16,17 +19,31 @@ pub fn generate_proof(nonce: Nonce) -> Box<[u8; FULL_PROOF_BYTE_COUNT]> {
     for i in 0..K {
         let index = challenge_index(&root, i);
         let proof = tree.proof(&[index]).to_bytes();
-        let block = &blocks[index - 1];
+        let block = if index - 1 < CHAIN_BLOCK_COUNT {
+            &chains[0][index - 1]
+        } else {
+            &chains[1][index - 1 - CHAIN_BLOCK_COUNT]
+        };
         let reference_index = reference_block_index(index, block);
         let parent_proof = tree.proof(&[index - 1]).to_bytes();
         let reference_proof = tree.proof(&[reference_index]).to_bytes();
+        let parent_block = if index < CHAIN_BLOCK_COUNT {
+            &chains[0][index]
+        } else {
+            &chains[1][index - CHAIN_BLOCK_COUNT]
+        };
+        let reference_block = if reference_index < CHAIN_BLOCK_COUNT {
+            &chains[0][reference_index]
+        } else {
+            &chains[1][reference_index - CHAIN_BLOCK_COUNT]
+        };
         output.extend_from_slice(&(index as u32).to_le_bytes());
         output.extend_from_slice(&(reference_index as u32).to_le_bytes());
-        output.extend_from_slice(&blocks[index]);
+        output.extend_from_slice(parent_block);
         output.extend_from_slice(&proof);
         output.extend_from_slice(block);
         output.extend_from_slice(&parent_proof);
-        output.extend_from_slice(&blocks[reference_index]);
+        output.extend_from_slice(reference_block);
         output.extend_from_slice(&reference_proof);
     }
     output.into_boxed_slice().try_into().unwrap()

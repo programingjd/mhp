@@ -1,6 +1,6 @@
 use crate::block::{
-    BLOCK_COUNT, BLOCK_SIZE, Block, FULL_PROOF_BYTE_COUNT, ITERATION_COUNT, TREE_PROOF_BYTE_COUNT,
-    challenge_index, reference_block_index,
+    BLOCK_SIZE, Block, CHAIN_BLOCK_COUNT, FULL_PROOF_BYTE_COUNT, ITERATION_COUNT,
+    TOTAL_BLOCK_COUNT, TREE_PROOF_BYTE_COUNT, challenge_index, reference_block_index,
 };
 use crate::hasher::Blake2bHasher;
 use crate::{K, Nonce};
@@ -10,6 +10,10 @@ use hkdf::SimpleHkdf;
 use rs_merkle::{Hasher, MerkleProof};
 
 pub fn verify_proof(nonce: Nonce, proof: &[u8; FULL_PROOF_BYTE_COUNT]) -> Option<()> {
+    let hash = Blake2bHasher::hash(nonce);
+    let (nonce1, nonce2) = hash.split_at(16);
+    let nonce1: Nonce = nonce1.try_into().unwrap();
+    let nonce2: Nonce = nonce2.try_into().unwrap();
     let mut remaining = proof.as_slice();
     let (root, rest) = remaining.split_at(32);
     remaining = rest;
@@ -32,7 +36,7 @@ pub fn verify_proof(nonce: Nonce, proof: &[u8; FULL_PROOF_BYTE_COUNT]) -> Option
             root.try_into().unwrap(),
             &[index],
             &[Blake2bHasher::hash(block)],
-            BLOCK_COUNT,
+            TOTAL_BLOCK_COUNT,
         ) {
             return None;
         }
@@ -49,7 +53,7 @@ pub fn verify_proof(nonce: Nonce, proof: &[u8; FULL_PROOF_BYTE_COUNT]) -> Option
             root.try_into().unwrap(),
             &[index - 1],
             &[Blake2bHasher::hash(parent_block)],
-            BLOCK_COUNT,
+            TOTAL_BLOCK_COUNT,
         ) {
             return None;
         }
@@ -62,12 +66,22 @@ pub fn verify_proof(nonce: Nonce, proof: &[u8; FULL_PROOF_BYTE_COUNT]) -> Option
             root.try_into().unwrap(),
             &[reference_index],
             &[Blake2bHasher::hash(reference_block)],
-            BLOCK_COUNT,
+            TOTAL_BLOCK_COUNT,
         ) {
             return None;
         }
         let reference_block = reference_block.try_into().unwrap();
-        if block != compute_block(nonce, parent_block, reference_block) {
+        if block
+            != compute_block(
+                if index < CHAIN_BLOCK_COUNT {
+                    nonce1
+                } else {
+                    nonce2
+                },
+                parent_block,
+                reference_block,
+            )
+        {
             return None;
         }
     }
