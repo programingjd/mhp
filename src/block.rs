@@ -1,18 +1,17 @@
-use crate::hasher::Blake2bHasher;
+use crate::hasher::HASH_LENGTH;
 use crate::{K, Nonce};
 use blake2::digest::FixedOutput;
-use blake2::{Blake2b512, Digest};
+use blake2::{Blake2b, Blake2b512, Digest};
 use hkdf::SimpleHkdf;
-use rs_merkle::Hasher;
 
-pub(crate) const ITERATION_COUNT: usize = 64;
+pub(crate) const ITERATION_COUNT: usize = 32;
 pub(crate) const BLOCK_SIZE: usize = 1024;
 pub(crate) type Block = [u8; BLOCK_SIZE];
 pub(crate) const CHAIN_BLOCK_COUNT: usize = 131_072;
 pub(crate) const TOTAL_BLOCK_COUNT: usize = CHAIN_BLOCK_COUNT * 2;
-pub(crate) const TREE_PROOF_BYTE_COUNT: usize = TOTAL_BLOCK_COUNT.ilog2() as usize * 32;
+pub(crate) const TREE_PROOF_BYTE_COUNT: usize = TOTAL_BLOCK_COUNT.ilog2() as usize * HASH_LENGTH;
 const ESTIMATED_CHALLENGE_PROOF_BYTE_COUNT: usize =
-    4 + 4 + BLOCK_SIZE + BLOCK_SIZE + 32 + 4 + (TREE_PROOF_BYTE_COUNT / 2);
+    4 + 4 + BLOCK_SIZE + BLOCK_SIZE + HASH_LENGTH + 4 + (TREE_PROOF_BYTE_COUNT / 2);
 pub(crate) const ESTIMATED_FULL_PROOF_BYTE_COUNT: usize =
     32 + ESTIMATED_CHALLENGE_PROOF_BYTE_COUNT * K;
 const U64_VALUE_COUNT: u128 = u64::MAX as u128 + 1;
@@ -47,7 +46,7 @@ pub(crate) fn reference_block_index(index: usize, parent_block: &Block) -> usize
 }
 
 pub(crate) fn generate_chains(nonce: Nonce) -> [Box<[Block; CHAIN_BLOCK_COUNT]>; 2] {
-    let hash = Blake2bHasher::hash(nonce);
+    let hash: [u8; 32] = Blake2b::digest(nonce).into();
     let (nonce1, nonce2) = hash.split_at(16);
     let nonce1: Nonce = nonce1.try_into().unwrap();
     let nonce2: Nonce = nonce2.try_into().unwrap();

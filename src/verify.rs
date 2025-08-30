@@ -2,28 +2,28 @@ use crate::block::{
     BLOCK_SIZE, Block, CHAIN_BLOCK_COUNT, ITERATION_COUNT, TOTAL_BLOCK_COUNT, challenge_index,
     reference_block_index,
 };
-use crate::hasher::Blake2bHasher;
+use crate::hasher::{Blake2bHasher, HASH_LENGTH};
 use crate::parser::Parser;
 use crate::{K, Nonce};
 use blake2::digest::FixedOutput;
-use blake2::{Blake2b512, Digest};
+use blake2::{Blake2b, Blake2b512, Digest};
 use hkdf::SimpleHkdf;
 use rs_merkle::{Hasher, MerkleProof};
 
 pub fn verify_proof(nonce: Nonce, proof: &[u8]) -> Option<()> {
-    let hash = Blake2bHasher::hash(nonce);
+    let hash: [u8; 32] = Blake2b::digest(nonce).into();
     let (nonce1, nonce2) = hash.split_at(16);
     let nonce1: Nonce = nonce1.try_into().unwrap();
     let nonce2: Nonce = nonce2.try_into().unwrap();
     let mut parser = Parser::new(proof);
-    let root = *parser.read::<32>()?;
+    let root = *parser.read::<HASH_LENGTH>()?;
     for i in 0..K {
         let index = parser.read_uint()?;
         if index != challenge_index(&root, i) {
             return None;
         }
         let reference_index = parser.read_uint()?;
-        let block_hash = *parser.read::<32>()?;
+        let block_hash = *parser.read::<HASH_LENGTH>()?;
         let blocks = parser.read_slice(BLOCK_SIZE * 2)?;
         let (parent_block, reference_block) = blocks.split_at_checked(BLOCK_SIZE)?;
         let parent_block: &Block = parent_block.try_into().unwrap();
@@ -55,7 +55,7 @@ pub fn verify_proof(nonce: Nonce, proof: &[u8]) -> Option<()> {
         ];
         indexed_leaves.sort_by_key(|&(i, _)| i);
         let mut indices = [0; 3];
-        let mut leaves = [[0; 32]; 3];
+        let mut leaves = [[0; HASH_LENGTH]; 3];
         for (i, (index, hash)) in indexed_leaves.into_iter().enumerate() {
             indices[i] = index;
             leaves[i] = hash;

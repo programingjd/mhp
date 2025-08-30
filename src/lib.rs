@@ -6,7 +6,7 @@ mod verify;
 
 pub type Nonce<'a> = &'a [u8; 16];
 
-const K: usize = 32;
+const K: usize = 5;
 
 #[cfg(test)]
 mod tests {
