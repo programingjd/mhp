@@ -4,10 +4,10 @@ use blake2::digest::FixedOutput;
 use blake2::{Blake2b, Blake2b512, Digest};
 use hkdf::SimpleHkdf;
 
-pub(crate) const ITERATION_COUNT: usize = 32;
-pub(crate) const BLOCK_SIZE: usize = 1024;
+pub(crate) const ITERATION_COUNT: usize = 8;
+pub(crate) const BLOCK_SIZE: usize = 256;
 pub(crate) type Block = [u8; BLOCK_SIZE];
-pub(crate) const CHAIN_BLOCK_COUNT: usize = 131_072;
+pub(crate) const CHAIN_BLOCK_COUNT: usize = 524_288;
 pub(crate) const TOTAL_BLOCK_COUNT: usize = CHAIN_BLOCK_COUNT * 2;
 pub(crate) const TREE_PROOF_BYTE_COUNT: usize = TOTAL_BLOCK_COUNT.ilog2() as usize * HASH_LENGTH;
 const ESTIMATED_CHALLENGE_PROOF_BYTE_COUNT: usize =

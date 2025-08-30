@@ -21,6 +21,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot-tariff"
+version = "0.1.0"
+dependencies = [
+ "blake2",
+ "hkdf",
+ "rand",
+ "rs_merkle",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -101,16 +111,6 @@ name = "libc"
 version = "0.2.175"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
-
-[[package]]
-name = "mhp"
-version = "0.1.0"
-dependencies = [
- "blake2",
- "hkdf",
- "rand",
- "rs_merkle",
-]
 
 [[package]]
 name = "r-efi"
