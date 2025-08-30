@@ -1,89 +1,71 @@
 use crate::block::{
-    BLOCK_SIZE, Block, CHAIN_BLOCK_COUNT, FULL_PROOF_BYTE_COUNT, ITERATION_COUNT,
-    TOTAL_BLOCK_COUNT, TREE_PROOF_BYTE_COUNT, challenge_index, reference_block_index,
+    BLOCK_SIZE, Block, CHAIN_BLOCK_COUNT, ITERATION_COUNT, TOTAL_BLOCK_COUNT, challenge_index,
+    reference_block_index,
 };
 use crate::hasher::Blake2bHasher;
+use crate::parser::Parser;
 use crate::{K, Nonce};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2b512, Digest};
 use hkdf::SimpleHkdf;
 use rs_merkle::{Hasher, MerkleProof};
 
-pub fn verify_proof(nonce: Nonce, proof: &[u8; FULL_PROOF_BYTE_COUNT]) -> Option<()> {
+pub fn verify_proof(nonce: Nonce, proof: &[u8]) -> Option<()> {
     let hash = Blake2bHasher::hash(nonce);
     let (nonce1, nonce2) = hash.split_at(16);
     let nonce1: Nonce = nonce1.try_into().unwrap();
     let nonce2: Nonce = nonce2.try_into().unwrap();
-    let mut remaining = proof.as_slice();
-    let (root, rest) = remaining.split_at(32);
-    remaining = rest;
+    let mut parser = Parser::new(proof);
+    let root = *parser.read::<32>()?;
     for i in 0..K {
-        let (index, rest) = remaining.split_at(4);
-        remaining = rest;
-        let index = u32::from_le_bytes(index.try_into().unwrap()) as usize;
-        if index != challenge_index(root, i) {
+        let index = parser.read_uint()?;
+        if index != challenge_index(&root, i) {
             return None;
         }
-        let (reference_index, rest) = remaining.split_at(4);
-        remaining = rest;
-        let reference_index = u32::from_le_bytes(reference_index.try_into().unwrap()) as usize;
-        let (block, rest) = remaining.split_at(BLOCK_SIZE);
-        remaining = rest;
-        let (proof, rest) = remaining.split_at(TREE_PROOF_BYTE_COUNT);
-        remaining = rest;
-        let proof = MerkleProof::<Blake2bHasher>::from_bytes(proof).ok()?;
-        if !proof.verify(
-            root.try_into().unwrap(),
-            &[index],
-            &[Blake2bHasher::hash(block)],
-            TOTAL_BLOCK_COUNT,
-        ) {
-            return None;
-        }
-        let (parent_block, rest) = remaining.split_at(BLOCK_SIZE);
-        remaining = rest;
-        let parent_block = parent_block.try_into().unwrap();
+        let reference_index = parser.read_uint()?;
+        let block_hash = *parser.read::<32>()?;
+        let blocks = parser.read_slice(BLOCK_SIZE * 2)?;
+        let (parent_block, reference_block) = blocks.split_at_checked(BLOCK_SIZE)?;
+        let parent_block: &Block = parent_block.try_into().unwrap();
         if reference_index != reference_block_index(index, parent_block) {
             return None;
         }
-        let (proof, rest) = remaining.split_at(TREE_PROOF_BYTE_COUNT);
-        remaining = rest;
+        let reference_block: &Block = reference_block.try_into().unwrap();
+        let block = compute_block(
+            if index < CHAIN_BLOCK_COUNT {
+                nonce1
+            } else {
+                nonce2
+            },
+            parent_block,
+            reference_block,
+        );
+        if block_hash != Blake2bHasher::hash(&block) {
+            return None;
+        }
+        let parent_block_hash = Blake2bHasher::hash(parent_block);
+        let reference_block_hash = Blake2bHasher::hash(reference_block);
+        let len = parser.read_uint()?;
+        let proof = parser.read_slice(len)?;
         let proof = MerkleProof::<Blake2bHasher>::from_bytes(proof).ok()?;
-        if !proof.verify(
-            root.try_into().unwrap(),
-            &[index - 1],
-            &[Blake2bHasher::hash(parent_block)],
-            TOTAL_BLOCK_COUNT,
-        ) {
+        let mut indexed_leaves = [
+            (index - 1, parent_block_hash),
+            (index, block_hash),
+            (reference_index, reference_block_hash),
+        ];
+        indexed_leaves.sort_by_key(|&(i, _)| i);
+        let mut indices = [0; 3];
+        let mut leaves = [[0; 32]; 3];
+        for (i, (index, hash)) in indexed_leaves.into_iter().enumerate() {
+            indices[i] = index;
+            leaves[i] = hash;
+        }
+        if !proof.verify(root, &indices, &leaves, TOTAL_BLOCK_COUNT) {
             return None;
         }
-        let (reference_block, rest) = remaining.split_at(BLOCK_SIZE);
-        remaining = rest;
-        let (proof, rest) = remaining.split_at(TREE_PROOF_BYTE_COUNT);
-        remaining = rest;
-        let proof = MerkleProof::<Blake2bHasher>::from_bytes(proof).ok()?;
-        if !proof.verify(
-            root.try_into().unwrap(),
-            &[reference_index],
-            &[Blake2bHasher::hash(reference_block)],
-            TOTAL_BLOCK_COUNT,
-        ) {
-            return None;
-        }
-        let reference_block = reference_block.try_into().unwrap();
-        if block
-            != compute_block(
-                if index < CHAIN_BLOCK_COUNT {
-                    nonce1
-                } else {
-                    nonce2
-                },
-                parent_block,
-                reference_block,
-            )
-        {
-            return None;
-        }
+    }
+    if !parser.unread().is_empty() {
+        return None;
     }
     Some(())
 }
@@ -93,7 +75,7 @@ fn compute_block(nonce: Nonce, parent_block: &Block, reference_block: &Block) ->
     hasher.update(reference_block);
     let mut hash = hasher.finalize_fixed();
     for _ in 0..ITERATION_COUNT {
-        hash = Blake2b512::digest(&hash);
+        hash = Blake2b512::digest(hash);
     }
     let mut allocated = [0u8; BLOCK_SIZE];
     SimpleHkdf::<Blake2b512>::new(Some(nonce), &hash)
@@ -105,6 +87,7 @@ fn compute_block(nonce: Nonce, parent_block: &Block, reference_block: &Block) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::block::ESTIMATED_FULL_PROOF_BYTE_COUNT;
     use std::fs::{OpenOptions, read_dir};
     use std::io::Read;
 
@@ -121,15 +104,21 @@ mod tests {
                     .chunks(2)
                     .map(|c| u8::from_str_radix(std::str::from_utf8(c).unwrap(), 16).unwrap())
                     .collect::<Vec<u8>>();
-                let mut proof = Vec::with_capacity(FULL_PROOF_BYTE_COUNT);
-                assert_eq!(
-                    FULL_PROOF_BYTE_COUNT,
+                let mut proof = Vec::with_capacity(ESTIMATED_FULL_PROOF_BYTE_COUNT);
+                assert!(
                     OpenOptions::new()
                         .read(true)
                         .open(format!("test_data/{}", entry.file_name().display()))
                         .unwrap()
                         .read_to_end(&mut proof)
                         .unwrap()
+                        > K * (4
+                            + 4
+                            + BLOCK_SIZE
+                            + BLOCK_SIZE
+                            + 32
+                            + 4
+                            + TOTAL_BLOCK_COUNT.ilog2() as usize)
                 );
                 verify_proof(
                     nonce.as_slice().try_into().unwrap(),

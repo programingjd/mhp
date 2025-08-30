@@ -1,6 +1,7 @@
 mod block;
 pub mod generate;
 mod hasher;
+mod parser;
 mod verify;
 
 pub type Nonce<'a> = &'a [u8; 16];

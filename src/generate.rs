@@ -1,13 +1,13 @@
 use crate::block::{
-    CHAIN_BLOCK_COUNT, FULL_PROOF_BYTE_COUNT, challenge_index, generate_chains,
+    CHAIN_BLOCK_COUNT, ESTIMATED_FULL_PROOF_BYTE_COUNT, challenge_index, generate_chains,
     reference_block_index,
 };
 use crate::hasher::Blake2bHasher;
 use crate::{K, Nonce};
 use rs_merkle::{Hasher, MerkleTree};
 
-pub fn generate_proof(nonce: Nonce) -> Box<[u8; FULL_PROOF_BYTE_COUNT]> {
-    let mut output = Vec::with_capacity(FULL_PROOF_BYTE_COUNT);
+pub fn generate_proof(nonce: Nonce) -> Box<[u8]> {
+    let mut output = Vec::with_capacity(ESTIMATED_FULL_PROOF_BYTE_COUNT);
     let chains = generate_chains(nonce);
     let leaves = chains
         .iter()
@@ -18,41 +18,41 @@ pub fn generate_proof(nonce: Nonce) -> Box<[u8; FULL_PROOF_BYTE_COUNT]> {
     output.extend_from_slice(&root);
     for i in 0..K {
         let index = challenge_index(&root, i);
-        let proof = tree.proof(&[index]).to_bytes();
-        let block = if index - 1 < CHAIN_BLOCK_COUNT {
-            &chains[0][index - 1]
-        } else {
-            &chains[1][index - 1 - CHAIN_BLOCK_COUNT]
-        };
-        let reference_index = reference_block_index(index, block);
-        let parent_proof = tree.proof(&[index - 1]).to_bytes();
-        let reference_proof = tree.proof(&[reference_index]).to_bytes();
-        let parent_block = if index < CHAIN_BLOCK_COUNT {
+        let block = if index < CHAIN_BLOCK_COUNT {
             &chains[0][index]
         } else {
             &chains[1][index - CHAIN_BLOCK_COUNT]
         };
+        let parent_block = if index - 1 < CHAIN_BLOCK_COUNT {
+            &chains[0][index - 1]
+        } else {
+            &chains[1][index - 1 - CHAIN_BLOCK_COUNT]
+        };
+        let reference_index = reference_block_index(index, parent_block);
         let reference_block = if reference_index < CHAIN_BLOCK_COUNT {
             &chains[0][reference_index]
         } else {
             &chains[1][reference_index - CHAIN_BLOCK_COUNT]
         };
+        let block_hash = Blake2bHasher::hash(block);
+        let mut indices = [index - 1, index, reference_index];
+        indices.sort_unstable();
+        let proof = tree.proof(&indices).to_bytes();
         output.extend_from_slice(&(index as u32).to_le_bytes());
         output.extend_from_slice(&(reference_index as u32).to_le_bytes());
+        output.extend_from_slice(&block_hash);
         output.extend_from_slice(parent_block);
-        output.extend_from_slice(&proof);
-        output.extend_from_slice(block);
-        output.extend_from_slice(&parent_proof);
         output.extend_from_slice(reference_block);
-        output.extend_from_slice(&reference_proof);
+        output.extend_from_slice(&(proof.len() as u32).to_le_bytes());
+        output.extend_from_slice(&proof);
     }
-    output.into_boxed_slice().try_into().unwrap()
+    output.into_boxed_slice()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::FULL_PROOF_BYTE_COUNT;
+    use crate::block::{BLOCK_SIZE, TOTAL_BLOCK_COUNT};
     use rand::TryRngCore;
     use rand::rngs::OsRng;
     use std::fmt::{Formatter, LowerHex};
@@ -65,13 +65,12 @@ mod tests {
         proof();
     }
 
-    // #[ignore]
+    #[ignore]
     #[test]
     fn record_proof() {
         let t = SystemTime::now();
         let (nonce, proof) = proof();
         println!("{}s", t.elapsed().unwrap().as_millis() as f32 / 1000.0);
-        assert_eq!(FULL_PROOF_BYTE_COUNT, proof.len());
         OpenOptions::new()
             .truncate(true)
             .create(true)
@@ -82,12 +81,22 @@ mod tests {
             .unwrap();
     }
 
-    fn proof() -> ([u8; 16], Box<[u8; FULL_PROOF_BYTE_COUNT]>) {
+    fn proof() -> ([u8; 16], Box<[u8]>) {
         let mut nonce = [0u8; 16];
         OsRng::default()
             .try_fill_bytes(&mut nonce)
             .expect("failed to generate nonce");
         let proof = generate_proof(&nonce);
+        assert!(
+            proof.len()
+                > K * (4
+                    + 4
+                    + BLOCK_SIZE
+                    + BLOCK_SIZE
+                    + 32
+                    + 4
+                    + TOTAL_BLOCK_COUNT.ilog2() as usize)
+        );
         (nonce, proof)
     }
 
