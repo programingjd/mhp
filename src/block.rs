@@ -4,7 +4,7 @@ use blake2::digest::FixedOutput;
 use blake2::{Blake2b, Blake2b512, Digest};
 use hkdf::SimpleHkdf;
 
-pub(crate) const ITERATION_COUNT: usize = 8;
+pub(crate) const ITERATION_COUNT: usize = 4;
 pub(crate) const BLOCK_SIZE: usize = 256;
 pub(crate) type Block = [u8; BLOCK_SIZE];
 pub(crate) const CHAIN_BLOCK_COUNT: usize = 524_288;
@@ -43,6 +43,20 @@ pub(crate) fn reference_block_index(index: usize, parent_block: &Block) -> usize
     let r = mix(r1, r2) as u128;
     let j = (i - 1) as u128;
     ((r * j) >> 64) as usize + offset
+}
+
+pub(crate) fn generate_first_chain(nonce: Nonce) -> Box<[Block; CHAIN_BLOCK_COUNT]> {
+    let hash: [u8; 32] = Blake2b::digest(nonce).into();
+    let (nonce, _) = hash.split_at(16);
+    let nonce: Nonce = nonce.try_into().unwrap();
+    generate_chain(nonce, 0)
+}
+
+pub(crate) fn generate_second_chain(nonce: Nonce) -> Box<[Block; CHAIN_BLOCK_COUNT]> {
+    let hash: [u8; 32] = Blake2b::digest(nonce).into();
+    let (_, nonce) = hash.split_at(16);
+    let nonce: Nonce = nonce.try_into().unwrap();
+    generate_chain(nonce, CHAIN_BLOCK_COUNT)
 }
 
 pub(crate) fn generate_chains(nonce: Nonce) -> [Box<[Block; CHAIN_BLOCK_COUNT]>; 2] {

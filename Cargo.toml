@@ -21,7 +21,23 @@ version = "0.12"
 default-features = false
 features = []
 
+[dependencies.wasm-bindgen]
+optional = true
+version = "0.2"
+default-features = false
+features = []
+
 [dev-dependencies.rand]
 version = "0.9"
 default-features = false
 features = ["os_rng"]
+
+[features]
+default = ["wasm", "server"]
+wasm = ["wasm-bindgen"]
+server = []
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1

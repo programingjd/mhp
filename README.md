@@ -50,3 +50,9 @@ but finite number of seeds in a rolling time window of 15 minutes.
 The server uses two small (64kb) local and unsynchronized bit-vectors to track the consumed seeds.
 This design is extremely efficient but allows a challenge to potentially be replayed in the same time window
 as many times are there are backend servers. This trade-off should be acceptable for the vast majority of applications.
+
+---
+
+### Building the project ###
+
+```wasm-pack build --target web --release -- --features wasm```

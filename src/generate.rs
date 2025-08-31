@@ -1,5 +1,5 @@
 use crate::block::{
-    CHAIN_BLOCK_COUNT, ESTIMATED_FULL_PROOF_BYTE_COUNT, challenge_index, generate_chains,
+    Block, CHAIN_BLOCK_COUNT, ESTIMATED_FULL_PROOF_BYTE_COUNT, challenge_index, generate_chains,
     reference_block_index,
 };
 use crate::hasher::Blake2bHasher;
@@ -7,8 +7,12 @@ use crate::{K, Nonce};
 use rs_merkle::{Hasher, MerkleTree};
 
 pub fn generate_proof(nonce: Nonce) -> Box<[u8]> {
-    let mut output = Vec::with_capacity(ESTIMATED_FULL_PROOF_BYTE_COUNT);
     let chains = generate_chains(nonce);
+    combine_chains(&chains)
+}
+
+pub fn combine_chains(chains: &[Box<[Block; CHAIN_BLOCK_COUNT]>; 2]) -> Box<[u8]> {
+    let mut output = Vec::with_capacity(ESTIMATED_FULL_PROOF_BYTE_COUNT);
     let leaves = chains
         .iter()
         .flat_map(|it| it.iter().map(|it| Blake2bHasher::hash(it)))
@@ -52,25 +56,31 @@ pub fn generate_proof(nonce: Nonce) -> Box<[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::block::{BLOCK_SIZE, TOTAL_BLOCK_COUNT};
+    use crate::block::{
+        BLOCK_SIZE, TOTAL_BLOCK_COUNT, generate_first_chain, generate_second_chain,
+    };
     use rand::TryRngCore;
     use rand::rngs::OsRng;
     use std::fmt::{Formatter, LowerHex};
     use std::fs::OpenOptions;
     use std::io::Write;
+    use std::thread;
     use std::time::SystemTime;
 
     #[test]
     fn test_generate_proof() {
-        proof();
+        let nonce = nonce();
+        let proof1 = proof(&nonce, false);
+        let proof2 = proof(&nonce, true);
+        assert_eq!(proof1.len(), proof2.len());
+        assert_eq!(Blake2bHasher::hash(&proof1), Blake2bHasher::hash(&proof2));
     }
 
     #[ignore]
     #[test]
     fn record_proof() {
-        let t = SystemTime::now();
-        let (nonce, proof) = proof();
-        println!("{}s", t.elapsed().unwrap().as_millis() as f32 / 1000.0);
+        let nonce = nonce();
+        let proof = proof(&nonce, true);
         OpenOptions::new()
             .truncate(true)
             .create(true)
@@ -81,12 +91,27 @@ mod tests {
             .unwrap();
     }
 
-    fn proof() -> ([u8; 16], Box<[u8]>) {
+    fn nonce() -> [u8; 16] {
         let mut nonce = [0u8; 16];
         OsRng::default()
             .try_fill_bytes(&mut nonce)
             .expect("failed to generate nonce");
-        let proof = generate_proof(&nonce);
+        nonce.try_into().unwrap()
+    }
+
+    fn proof(nonce: Nonce, parallel: bool) -> Box<[u8]> {
+        let t = SystemTime::now();
+        let proof = if parallel {
+            let nonce = nonce.clone();
+            let join1 = thread::spawn(move || generate_first_chain(&nonce));
+            let join2 = thread::spawn(move || generate_second_chain(&nonce));
+            let chain1 = join1.join().unwrap();
+            let chain2 = join2.join().unwrap();
+            combine_chains(&[chain1, chain2])
+        } else {
+            generate_proof(&nonce)
+        };
+        println!("{}s", t.elapsed().unwrap().as_millis() as f32 / 1000.0);
         assert!(
             proof.len()
                 > K * (4
@@ -97,7 +122,7 @@ mod tests {
                     + 4
                     + TOTAL_BLOCK_COUNT.ilog2() as usize)
         );
-        (nonce, proof)
+        proof
     }
 
     struct Hex<'a>(&'a [u8]);
