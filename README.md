@@ -55,4 +55,4 @@ as many times are there are backend servers. This trade-off should be acceptable
 
 ### Building the project ###
 
-```wasm-pack build --target web --release -- --features wasm```
+```wasm-pack build --target web --release -- --no-default-features --features wasm```

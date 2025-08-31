@@ -19,26 +19,23 @@ const K: usize = 10;
 //     generate::generate_proof(nonce.as_slice().try_into().unwrap()).into_vec()
 // }
 
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn generate_first_chain(nonce: Vec<u8>) -> Vec<u8> {
-    let chain = block::generate_first_chain(nonce.as_slice().try_into().unwrap());
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn generate_first_chain(nonce: &[u8]) -> Vec<u8> {
+    let chain = block::generate_first_chain(nonce.try_into().unwrap());
     let raw = Box::into_raw(chain) as *mut u8;
     let n = block::CHAIN_BLOCK_COUNT * block::BLOCK_SIZE;
     unsafe { Vec::from_raw_parts(raw, n, n) }
 }
 
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn generate_second_chain(nonce: Vec<u8>) -> Vec<u8> {
-    let chain = block::generate_second_chain(nonce.as_slice().try_into().unwrap());
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn generate_second_chain(nonce: &[u8]) -> Vec<u8> {
+    let chain = block::generate_second_chain(nonce.try_into().unwrap());
     let raw = Box::into_raw(chain) as *mut u8;
     let n = block::CHAIN_BLOCK_COUNT * block::BLOCK_SIZE;
     unsafe { Vec::from_raw_parts(raw, n, n) }
 }
 
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn combine_chains(first_chain: Vec<u8>, second_chain: Vec<u8>) -> Vec<u8> {
     let first_chain: Box<[u8]> = first_chain.into_boxed_slice();
     let raw = Box::into_raw(first_chain) as *mut [block::Block; block::CHAIN_BLOCK_COUNT];
@@ -47,4 +44,24 @@ pub fn combine_chains(first_chain: Vec<u8>, second_chain: Vec<u8>) -> Vec<u8> {
     let raw = Box::into_raw(second_chain) as *mut [block::Block; block::CHAIN_BLOCK_COUNT];
     let second_chain = unsafe { Box::from_raw(raw) };
     generate::combine_chains(&[first_chain, second_chain]).into_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::verify::verify_proof;
+    use rand::TryRngCore;
+    use rand::rand_core::OsRng;
+
+    #[test]
+    fn test_generate_and_verify_proof() {
+        let mut nonce = Vec::from([0u8; 16]);
+        OsRng::default()
+            .try_fill_bytes(&mut nonce)
+            .expect("failed to generate nonce");
+        let chain1 = generate_first_chain(&nonce);
+        let chain2 = generate_second_chain(&nonce);
+        let proof = combine_chains(chain1, chain2);
+        verify_proof(nonce.as_slice().try_into().unwrap(), &proof).unwrap();
+    }
 }
