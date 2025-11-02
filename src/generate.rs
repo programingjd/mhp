@@ -78,6 +78,24 @@ mod tests {
 
     #[ignore]
     #[test]
+    fn test_fixed_nonce() {
+        let nonce = [
+            0xd7, 0xb1, 0xd8, 0x90, 0xe9, 0x1d, 0xf4, 0x8f, 0xeb, 0x61, 0x6a, 0xbc, 0x39, 0x64,
+            0xda, 0x12,
+        ];
+        let proof = proof(&nonce, true);
+        OpenOptions::new()
+            .truncate(true)
+            .create(true)
+            .write(true)
+            .open(format!("{:x}", Hex(nonce.as_ref())))
+            .unwrap()
+            .write_all(proof.as_ref())
+            .unwrap();
+    }
+
+    #[ignore]
+    #[test]
     fn record_proof() {
         let nonce = nonce();
         let proof = proof(&nonce, true);

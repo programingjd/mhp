@@ -49,19 +49,23 @@ onmessage=({data})=>{
     console.log('starting generation of chain1');
     const chain=chain1(nonce_for_chain1);
     console.log(`chain1 generated: ${chain.length} bytes`);
-    return postMessage(chain,[chain.buffer]);
+    return postMessage([chain.buffer,chain.byteOffset,chain.byteLength],[chain.buffer]);
   }
   const nonce_for_chain2=data.nonce_for_chain2;
   if(nonce_for_chain2){
     console.log('starting generation of chain2');
     const chain=chain2(nonce_for_chain2);
     console.log(`chain2 generated: ${chain.length} bytes`);
-    return postMessage(chain,[chain.buffer]);
+    return postMessage([chain.buffer,chain.byteOffset,chain.byteLength],[chain.buffer]);
   }
   console.log('combining chains');
-  const proof=combine(data.chain1,data.chain2);
+  const arr=chain=>{
+    let [buffer,offset,length]=chain;
+    return new Uint8Array(buffer,offset,length);
+  };
+  const proof=combine(arr(data.chain1),arr(data.chain2));
   console.log(`proof generated: ${proof.length} bytes`);
-  return postMessage(proof,[proof.buffer]);
+  return postMessage([proof.buffer,proof.byteOffset,proof.byteLength],[proof.buffer]);
 };
 postMessage('ready');
 export {chain1,chain2,combine};
