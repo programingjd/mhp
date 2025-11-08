@@ -18,7 +18,7 @@ const U64_VALUE_COUNT: u128 = u64::MAX as u128 + 1;
 
 pub(crate) fn challenge_index(merkle_root: &[u8], i: usize) -> usize {
     let mut hasher = Blake2b512::new_with_prefix(merkle_root);
-    hasher.update(i.to_le_bytes());
+    hasher.update((i as u64).to_le_bytes());
     let hash = hasher.finalize_fixed();
     let seed = u64::from_le_bytes(hash[..8].try_into().unwrap()) as u128;
     let offset = if hash[8] > 127 { CHAIN_BLOCK_COUNT } else { 0 };

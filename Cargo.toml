@@ -32,6 +32,11 @@ version = "0.9"
 default-features = false
 features = ["os_rng"]
 
+[dev-dependencies.sha2]
+version = "0.10"
+default-features = false
+features = ["std", "force-soft"]
+
 [features]
 default = ["wasm", "server"]
 wasm = ["wasm-bindgen"]
@@ -41,3 +46,13 @@ server = []
 opt-level = "s"
 lto = "fat"
 codegen-units = 1
+
+[profile.dev]
+opt-level = 3
+lto = "fat"
+debug = true
+debug-assertions = true
+overflow-checks = true
+
+[profile.test]
+inherits = "dev"
