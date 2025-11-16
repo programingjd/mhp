@@ -16,8 +16,8 @@ pub struct NonceProducer<const MAX: usize> {
 }
 
 impl<const MAX: usize> NonceProducer<MAX> {
-    pub fn first() -> Self {
-        Self::generate(0, StdRng::from_os_rng())
+    pub fn for_generation(generation: u16, seed: [u8; 32]) -> Self {
+        Self::generate(generation, StdRng::from_seed(seed))
     }
     pub fn next(&self) -> Self {
         Self::generate(
@@ -63,7 +63,7 @@ impl<const MAX: usize> NonceProducer<MAX> {
         None
     }
     fn generate(generation: u16, mut rng: StdRng) -> Self {
-        let mut seed = [0u8; 64];
+        let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
         let kdf = SimpleHkdf::<Blake2b512>::new(None, &seed);
         let mut iv = [0u8; 32];
@@ -92,7 +92,9 @@ mod tests {
 
     #[test]
     fn test_nonce() {
-        let producer = NonceProducer::<MAX>::first();
+        let mut seed = [0u8; 32];
+        StdRng::from_os_rng().fill_bytes(&mut seed);
+        let producer = NonceProducer::<MAX>::for_generation(0, seed);
         let mut set = BTreeSet::new();
         for i in 0..MAX {
             let nonce = producer.nonce();

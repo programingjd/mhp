@@ -31,7 +31,7 @@ features = []
 optional = true
 version = "0.9"
 default-features = false
-features = ["std", "os_rng", "std_rng"]
+features = ["std", "std_rng"]
 
 [dev-dependencies.rand]
 version = "0.9"
