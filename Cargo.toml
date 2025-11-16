@@ -27,6 +27,12 @@ version = "0.2"
 default-features = false
 features = []
 
+[dependencies.rand]
+optional = true
+version = "0.9"
+default-features = false
+features = ["std", "os_rng", "std_rng"]
+
 [dev-dependencies.rand]
 version = "0.9"
 default-features = false
@@ -40,7 +46,7 @@ features = ["std", "force-soft"]
 [features]
 default = ["wasm", "server"]
 wasm = ["wasm-bindgen"]
-server = []
+server = ["dep:rand"]
 
 [profile.release]
 opt-level = "s"

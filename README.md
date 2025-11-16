@@ -9,7 +9,8 @@ Some of that cost also applies to regular users, but it should be minimal and ev
 
 ---
 
-Bot mitigation is typically handled by CAPTCHA solutions. However, their effectiveness relies on collecting and
+Bot mitigation is typically handled by [CAPTCHA](https://en.wikipedia.org/wiki/CAPTCHA) solutions. However, their
+effectiveness relies on collecting and
 analyzing extensive user data, which poses a significant privacy risk.
 
 This data is used to assess the probability that a user is human and not a bot.
@@ -22,23 +23,26 @@ This makes challenges unreliable, yet they remain a significant barrier to real 
 Faced with that reality, the only way for CAPTCHA providers to improve their solution is to collect even more data and
 increase their reliance on statistical analysis.
 This approach inevitably results in plenty of false positives that stop legitimate users,
-especially those using privacy services (like VPNs) or unusual browsers.
+especially those using privacy services (like [VPNs](https://en.wikipedia.org/wiki/Virtual_private_network)) or unusual
+browsers.
 
 <br>
 Instead of relying on the complexity of puzzle-like challenges, you can replace them with cryptographic challenges
-with a controllable cost, letting the browser use system resources to solve them and taking the burden off the user.
+with a controllable cost, letting the browser use system resources to solve them and taking the burden away from the user.
 
 For this to work, you have to make those challenges fast enough for the browser to solve
 but expensive enough to discourage automation.
 
-The challenge used by this project is a Merkle-tree-based proof of work that is both memory-hard and
-computationally-hard.
+The challenge used by this project is a [Merkle-tree](https://en.wikipedia.org/wiki/Merkle_tree)-based
+[proof of work](https://en.wikipedia.org/wiki/Proof_of_work) that is both
+[memory-hard](https://en.wikipedia.org/wiki/Memory-hard_function) and
+[computationally-hard](https://en.wikipedia.org/wiki/Computational_hardness_assumption).
 Even on aging phones, a few cores and a couple hundred megabytes of memory should be available.
 Therefore, the challenge is optimized to use these exact resources and solve the cryptographic proof in a few seconds.
 
 Finally, the challenges need to be unique and non-replayable (or at least with very limited replayability).
 
-A common way to achieve this is to use the user form input as a seed.
+A common way to achieve this is to use the user form input as a [seed](https://en.wikipedia.org/wiki/Random_seed).
 However, this approach delays the computation until that data is available,
 leaving only two undesirable options: make the computation faster and reduce its cost, or force the user to wait.
 
@@ -47,7 +51,7 @@ This is tricky to implement cheaply.
 
 The solution used in this project is to allow a large (over half a million)
 but finite number of seeds in a rolling time window of 15 minutes.
-The server uses two small (64kb) local and unsynchronized bit-vectors to track the consumed seeds.
+The server uses two small (64 kb) local and unsynchronized bit-vectors to track the consumed seeds.
 This design is extremely efficient but allows a challenge to potentially be replayed in the same time window
 as many times are there are backend servers. This trade-off should be acceptable for the vast majority of applications.
 

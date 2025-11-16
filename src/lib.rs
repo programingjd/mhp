@@ -5,9 +5,11 @@ mod block;
 pub mod generate;
 mod hasher;
 #[cfg(feature = "server")]
+pub mod nonce;
+#[cfg(feature = "server")]
 mod parser;
 #[cfg(feature = "server")]
-mod verify;
+pub mod verify;
 
 pub type Nonce<'a> = &'a [u8; 16];
 
