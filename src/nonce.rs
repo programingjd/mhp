@@ -39,9 +39,9 @@ pub struct VerifiableNonce {
 impl<const T: usize, const N: usize> RollingWindow<T, N> {
     pub fn from_seed(seed: &[u8; 32]) -> Self {
         const { assert!(T > 0, "T must be greater than 0") };
-        const { assert!(N % 64 == 0, "N must be a multiple of 64") };
+        const { assert!(N.is_multiple_of(64), "N must be a multiple of 64") };
         let generation = (UNIX_EPOCH.elapsed().unwrap().as_secs() / T as u64) as u16;
-        let (gen1, gen2) = NonceProducer::<N>::for_generations(generation, &seed);
+        let (gen1, gen2) = NonceProducer::<N>::for_generations(generation, seed);
         let generations = Arc::new(RwLock::new(Producers { gen1, gen2 }));
         let gens = Arc::downgrade(&generations);
         let rotator = Some(thread::spawn(move || {
@@ -112,7 +112,7 @@ pub struct NonceProducer<const MAX: usize = 512_000> {
 
 impl<const MAX: usize> NonceProducer<MAX> {
     pub fn for_generation(generation: u16, seed: &[u8; 32]) -> Self {
-        const { assert!(MAX % 64 == 0, "MAX must be a multiple of 64") };
+        const { assert!(MAX.is_multiple_of(64), "MAX must be a multiple of 64") };
         Self::generate(generation, seed)
     }
     pub(crate) fn for_generations(generation: u16, seed: &[u8; 32]) -> (Self, Self) {
@@ -164,16 +164,11 @@ impl<const MAX: usize> NonceProducer<MAX> {
         // we could probably optimize with a simple fetch_add as
         // it's unlikely to overflow and wrap around,
         // but fetch_update makes sure that doesn't happen.
-        if let Ok(j) = self
-            .cursor
+        self.cursor
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |it| {
                 if it == MAX { None } else { Some(it + 1) }
             })
-        {
-            Some(j)
-        } else {
-            None
-        }
+            .ok()
     }
     fn generate(generation: u16, seed: &[u8; 32]) -> Self {
         let kdf = SimpleHkdf::<Blake2b512>::new(Some(&generation.to_le_bytes()), seed);
@@ -188,8 +183,8 @@ impl<const MAX: usize> NonceProducer<MAX> {
         // SAFETY: we zero the memory to initialize,
         // which is safe because the pointer is correctly aligned by the vec.
         unsafe {
-            bitset.set_len(len);
             ptr::write_bytes(bitset.as_mut_ptr(), 0, len);
+            bitset.set_len(len);
         }
         let bitset = bitset.into_boxed_slice();
         Self {
