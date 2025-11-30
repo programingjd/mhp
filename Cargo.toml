@@ -32,10 +32,40 @@ version = "0.9"
 default-features = false
 features = ["os_rng"]
 
-[dev-dependencies.sha2]
-version = "0.10"
+[dev-dependencies.hyper]
+version = "1.8"
 default-features = false
-features = ["std", "force-soft"]
+features = ["server", "http1"]
+
+[dev-dependencies.hyper-util]
+version = "0.1"
+default-features = false
+features = ["tokio"]
+
+[dev-dependencies.http-body-util]
+version = "0.1"
+default-features = false
+features = []
+
+[dev-dependencies.multer]
+version = "3.1"
+default-features = false
+features = []
+
+[dev-dependencies.serde]
+version = "1.0"
+default-features = false
+features = ["std", "derive"]
+
+[dev-dependencies.serde_json]
+version = "1.0"
+default-features = false
+features = ["std"]
+
+[dev-dependencies.tokio]
+version = "1.48"
+default-features = false
+features = ["rt-multi-thread", "net", "macros"]
 
 [features]
 default = ["wasm", "server"]
