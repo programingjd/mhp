@@ -6,11 +6,16 @@
 <style>
 :root{
   color-scheme:dark only;
+  --accent-color:#ffb;
+  --border-color:#555;
+  --bg-color:#182025;
+  --fg-color:#ddd;
+  --focus-color:#67b;
 }
 html{
   width:100%;height:100%;
   font:400 clamp(8pt, 1vw + 1vh, 24pt)/1.25 sans-serif;
-  background:#222;color:#ddd;
+  background:var(--bg-color);color:var(--fg-color);
 }
 body{
   margin:0;padding:2em;min-height:100%;box-sizing:border-box;
@@ -21,15 +26,19 @@ main{
     width:min(100vw - 4em, 60ch);
     display:flex;flex-direction:column;justify-content:space-evenly;align-items:stretch;
   }
-  h2{text-align:center;font-size:1.5em;margin:0;padding:1em;color:#ffb}
+  h2{text-align:center;font-size:1.5em;margin:0;padding:1em;color:var(--accent-color)}
   ul{
     &{display:flex;flex-direction:column;gap:1em;margin:0;padding:0}
     li{
       &{
         display:flex;flex-direction:column;gap:.5em;
-        list-style:none;background:#333;border-radius:1em;padding:.5em 1em;
+        list-style:none;background:oklch(from var(--bg-color) max(0, l * .95) c h);border:1px solid var(--border-color);border-radius:.5em;padding:1em 1.5em;
       }
-      header{display:flex;justify-content:space-between;font-size:.75em;color:#999}
+      header{
+        &{display:flex;font-size:.75em;align-items:center; color:#999;gap:1em}
+        svg{width:1.5em;height:1.5em;fill:var(--accent-color)}
+        div{flex:1}
+      }
       p{padding:0;margin:0}
     }
   }
@@ -41,35 +50,84 @@ main{
       grid-template-columns: 1fr;
       gap:1em;
     }
+    &:disabled, &:has(:invalid){
+      button{
+        opacity:.5;
+        cursor:not-allowed;
+      }
+    }
     button{
       &{
+        position:relative;
         justify-self:center;padding:.5em 1em;
-        appearance:none;
-        background:#333;color:#eee;border:1px solid rgb(from currentColor r g b / .25);border-radius:.5em;
-        cursor:pointer;
+        appearance:none;font:inherit;line-height:1;
+        background:none;
+        color:color-mix(in oklch, currentColor, var(--accent-color));
+        border:2px solid rgb(from currentColor r g b / .25);border-radius:.5em;
+        cursor:pointer;outline:none;
+        overflow:hidden;
       }
-      &:hover{background:#555;color:#fff}
+      &:hover{
+        background:oklch(from var(--bg-color) max(0, l * 1.1) min(1, c + 0.1) h);
+        color:oklch(from currentColor max(0, l * 1.1) c h)
+      }
+      &:focus-visible{border:2px solid var(--focus-color)}
+      &:before{
+        content:'';position:absolute;
+        top:-200%;left:-200%;width:500%;height:500%;
+        aspect-ratio:1 / 1;
+        z-index:-1;
+        background-repeat:no-repeat;
+        background-size:50% 50%, 50% 50%;
+        background-position:0 0, 100% 0, 100% 100%, 0 100%;
+        transform:scale(2);
+        animation:rotate 2s linear infinite;
+        filter:blur(.1em);
+      }
+      &.busy{
+        &:before{
+          background-image:linear-gradient(var(--accent-color), var(--accent-color)), linear-gradient(var(--bg-color), var(--bg-color)), linear-gradient(var(--focus-color), var(--focus-color)), linear-gradient(var(--bg-color), var(--bg-color));
+        }
+        &{
+          border:2px solid oklch(from var(--bg-color) l min(1, c + 0.1) h);
+        }
+      }
+      &:after{
+        content:'';
+        position:absolute;
+        inset:.1em;
+        border-radius:.4em;
+        background:oklch(from var(--bg-color) l min(1, c + 0.1) h);
+        z-index:-1;
+      }
     }
     input{
       &{
         appearance:none;
         background:none;color:currentColor;border:none;outline:none;
         font:inherit;font-family:monospace;line-height:1;
-        border-bottom:1px solid rgb(from currentColor r g b / .5);
+        border-bottom:2px solid rgb(from var(--border-color) r g b);
       }
-      &:focus{border-bottom:2px solid #67b}
+      &:focus{border-bottom:2px solid var(--focus-color)}
     }
     textarea{
       &{
         appearance:none;
         background:none;color:currentColor;outline:none;font:inherit;font-family:monospace;padding:1em;
-        border:1px solid rgb(from currentColor r g b / .5);
+        border:2px solid rgb(from var(--border-color) r g b);
         border-radius:.5em;
         field-sizing:content;
       }
-      &:focus{border:2px solid #67b}
+      &:focus{border:2px solid var(--focus-color)}
     }
   }
+}
+footer{
+  position:absolute;bottom:0;padding:1em;font-family:monospace;font-size:50%;
+  color:oklch(from var(--fg-color) calc(l / .5) c h / .5);
+}
+@keyframes rotate{
+  100%{rotate:1turn}
 }
 </style>
 </head>
@@ -80,14 +138,22 @@ main{
     <ul id="comments"></ul>
   </div>
   <form>
-    <input aria-label="Name" placeholder="Name" id="name" type="text" required>
-    <textarea aria-label="Comment" placeholder="Comment" id="content" required></textarea>
-    <button type="submit">Post new comment</button>
+    <input aria-label="Name" placeholder="Name" name="author" type="text" required>
+    <textarea aria-label="Comment" placeholder="Comment" name="content" required></textarea>
+    <button type="submit" disabled>Submit</button>
   </form>
 </main>
+<footer>Debug information</footer>
 <template id="comment">
   <li itemscope itemtype="https://schema.org/Comment">
     <header>
+      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path
+          d="M19 10a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3v.966c0 1.06-1.236 1.639-2.05.96L14.638 19H12a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3h7Z"
+          opacity=".3"></path>
+        <path
+          d="M16 4a3 3 0 0 1 3 3v1h-8a4 4 0 0 0-4 4v4c0 1.044.4 1.996 1.056 2.708L7 19.5c-.824.618-2 .03-2-1V17a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h11Z"></path>
+      </svg>
       <div itemprop="author" itemscope itemtype="https://schema.org/Person">
         <meta itemprop="name" content="">
         <span></span>
@@ -104,18 +170,43 @@ main{
  * @property {string} author - Comment author
  * @property {string} content - Comment text content
  */
+/**
+ * @typedef {Record<string,*>} Nonce
+ * @property {number[]} nonce - 16 bytes nonce
+ * @property {number} generation - nonce generation
+ * @property {number} counter - nonce counter
+ */
+/**
+ * @typedef {Record<string,*>} Pow
+ * @property {number} timestamp - Unix timestamp (in seconds)
+ * @property {number} generation - nonce generation
+ * @property {number} counter - nonce counter
+ * @property {Uint8Array} nonce - 16 bytes nonce
+ * @property {Uint8Array} proof - Proof of work
+ */
+
 const container=document.getElementById('comments');
+const form=document.querySelector('form');
+const submitButton=form.querySelector('button[type="submit"]');
+const footer=document.querySelector('footer');
 
 /** @return {Promise<Comment[]>} */
 async function fetchComments(){
-  return [
-    {timestamp: 1755003600,author: 'John D.',content: 'First!'},
-    {timestamp: 1757840580,author: 'Mike T.',content: 'Great project! I hate CAPTCHAs.'}
-  ];
-  // const response=await fetch('/comments');
-  // return response.json();
+  // return [
+  //   {timestamp: 1755003600,author: 'John D.',content: 'First!'},
+  //   {timestamp: 1757840580,author: 'Mike T.',content: 'Great project! I hate CAPTCHAs.'}
+  // ];
+  const response=await fetch('/comments');
+  return response.json();
 }
 
+/** @return {Promise<Nonce>} */
+async function getNonce(){
+  const response=await fetch('./nonce');
+  return response.json();
+}
+
+/** @return {Promise<void>} */
 async function updateComments(){
   const count=container.childElementCount;
   const newComments=(await fetchComments()).filter((_,i)=>i>=count);
@@ -142,6 +233,73 @@ async function updateComments(){
 }
 
 await updateComments();
+const {generate}=await import('./pow.mjs');
+/** @return {Promise<Pow>} */
+const generatePow=async()=>{
+  const timestamp=Math.trunc(Date.now()/1000);
+  footer.textContent='Generating proof of work...';
+  const {generation,counter,nonce: hex}=await getNonce();
+  const nonce=Uint8Array.fromHex(hex);
+  const proof=await generate(nonce);
+  footer.textContent='Proof of work generated.';
+  return {
+    timestamp,
+    generation,
+    counter,
+    nonce,
+    proof
+  };
+};
+
+/**
+ *  @param {Pow} proof
+ *  @return {Pow|null}
+ */
+function checkProofExpiration(proof){
+  if(!proof) return null;
+  if(Date.now()/1000-proof.timestamp>897){ // 15 minutes - 10 seconds (ample time to send the proof)
+    footer.textContent='Proof of work expired.';
+    return null;
+  }
+  return proof;
+}
+
+let generated=null;
+form.addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(submitButton.classList.contains('busy')) return;
+  submitButton.classList.add('busy');
+  try{
+    const pow=checkProofExpiration(await generated)??checkProofExpiration(generated= await generatePow());
+    if(!pow) return;
+    const {generation,counter,nonce,proof}=pow;
+    const formData=new FormData(form);
+    formData.set('generation',generation.toString());
+    formData.set('counter',counter.toString());
+    formData.set('nonce',new Blob([nonce]));
+    formData.set('proof',new Blob([proof]));
+    const response=await fetch('./comment',{
+      method: 'POST',
+      body: formData
+    });
+    if(response.ok){
+      form.reset();
+      generated=generatePow();
+      await updateComments();
+    }else{
+      console.log(response);
+    }
+  }finally{
+    submitButton.classList.remove('busy');
+  }
+});
+submitButton.disabled=false;
+generated=generatePow();
+window.addEventListener('visibilitychange',async(_)=>{
+  if(!document.hidden&& !checkProofExpiration(await generated)){
+    generated=generatePow();
+  }
+});
 </script>
 </body>
 </html>

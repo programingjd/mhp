@@ -15,6 +15,9 @@ use std::time::UNIX_EPOCH;
 use tokio::net::TcpListener;
 
 const INDEX_HTML: &[u8] = include_bytes!("index.html");
+const POW_WASM: &[u8] = include_bytes!("../../pow.wasm");
+const POW_MODULE: &[u8] = include_bytes!("../../pow.mjs");
+const POW_WORKER_MODULE: &[u8] = include_bytes!("../../pow_worker_script.mjs");
 
 static COMMENTS: LazyLock<RwLock<Vec<Comment>>> = LazyLock::new(|| {
     RwLock::new(vec![
@@ -74,9 +77,41 @@ async fn handler(req: Request<hyper::body::Incoming>) -> Result<Response> {
     let builder = Builder::new();
     Ok(match req.uri().path() {
         "/" => match req.method() {
-            &hyper::Method::GET => {
-                builder.body(Either::Left(Full::new(Bytes::from_static(INDEX_HTML))))?
-            }
+            &hyper::Method::GET => builder
+                .header(CONTENT_TYPE, HeaderValue::from_static("text/html"))
+                .body(Either::Left(Full::new(Bytes::from_static(INDEX_HTML))))?,
+            _ => builder
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body(Either::Right(Empty::default()))?,
+        },
+        "/pow.wasm" => match req.method() {
+            &hyper::Method::GET => builder
+                .header(CONTENT_TYPE, HeaderValue::from_static("application/wasm"))
+                .body(Either::Left(Full::new(Bytes::from_static(POW_WASM))))?,
+            _ => builder
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body(Either::Right(Empty::default()))?,
+        },
+        "/pow.mjs" => match req.method() {
+            &hyper::Method::GET => builder
+                .header(
+                    CONTENT_TYPE,
+                    HeaderValue::from_static("application/javascript"),
+                )
+                .body(Either::Left(Full::new(Bytes::from_static(POW_MODULE))))?,
+            _ => builder
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body(Either::Right(Empty::default()))?,
+        },
+        "/pow_worker_script.mjs" => match req.method() {
+            &hyper::Method::GET => builder
+                .header(
+                    CONTENT_TYPE,
+                    HeaderValue::from_static("application/javascript"),
+                )
+                .body(Either::Left(Full::new(Bytes::from_static(
+                    POW_WORKER_MODULE,
+                ))))?,
             _ => builder
                 .status(StatusCode::METHOD_NOT_ALLOWED)
                 .body(Either::Right(Empty::default()))?,
@@ -101,7 +136,7 @@ async fn handler(req: Request<hyper::body::Incoming>) -> Result<Response> {
                 }) => builder
                     .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
                     .body(Either::Left(Full::new(Bytes::from_owner(format!(
-                        "{{\"generation\":{generation},\"counter\":{counter},\"nonce\":{:x}}}",
+                        "{{\"generation\":{generation},\"counter\":{counter},\"nonce\":\"{:x}\"}}",
                         Hex(&nonce)
                     )))))?,
                 None => builder
